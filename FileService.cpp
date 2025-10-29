@@ -39,12 +39,28 @@ void FileService::pushFile(const string &filepath) {
     for (auto &chunk: *chunks)
         totalSize += chunk.value.size();
     string response = "";
+    bool isSuccess = false;
     for (size_t i = 0; i < chunks->size(); ++i) {
+        isSuccess = true;
         auto &chunk = ((*chunks)[i]);
-
         http.putFileChunk(chunk, boundary, totalSize, response);
-        }
-    cout<< escapeResponse(response)<<endl;
+        string code = "";
+        if (response.size() >= 12) {
+            code = response.substr(9, 3);
+            if (code == "203") {
+                isSuccess = false;
+            }
+        } else {
+            //cout << "Warning " << endl;
+            isSuccess = false;
+           break;
+        }}
+    if (isSuccess) {
+        cout<< escapeResponse(response)<<endl;
+    }
+    else {
+        cout<<"Upload that bai"<<endl;
+    }
     delete chunks;
     }
 

@@ -13,6 +13,7 @@
 #include "HttpService.h"
 
 #include <thread>
+#include <future>
 
 #include "Utils.h"
 
