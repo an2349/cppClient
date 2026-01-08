@@ -5,29 +5,19 @@
 #ifndef CLIENT_HTTPSERVICE_H
 #define CLIENT_HTTPSERVICE_H
 
-// Fix cho MinGW: phai dinh nghia phien ban Windows truoc khi include
+// Fix rpcndr.h: Windows headers must come before standard C++ headers
 #ifdef _WIN32
     #ifndef _WIN32_WINNT
     #define _WIN32_WINNT 0x0600
     #endif
-#endif
-
-#include <string>
-#include <vector>
-#include <iostream>
-#include <sstream>
-#include <cstring>
-#include "MultiPart.h"
-#include "config.h"
-
-// --- Phần xử lý đa nền tảng cho Socket ---
-#ifdef _WIN32
     #include <winsock2.h>
     #include <ws2tcpip.h>
+    #include <iphlpapi.h>
+    #include <windows.h>
     
     #define CLOSE_SOCKET closesocket
     #define IS_VALID_SOCKET(s) ((s) != INVALID_SOCKET)
-    // Dinh nghia ssize_t cho MinGW neu thieu
+    
     #ifdef __MINGW32__
         #include <unistd.h>
     #endif
@@ -38,14 +28,20 @@
     #include <netinet/in.h>
     #include <arpa/inet.h>
     #include <unistd.h>
-    
     #define SOCKET int
     #define INVALID_SOCKET -1
     #define SOCKET_ERROR -1
     #define CLOSE_SOCKET close
     #define IS_VALID_SOCKET(s) ((s) >= 0)
 #endif
-// -----------------------------------------
+
+#include <string>
+#include <vector>
+#include <iostream>
+#include <sstream>
+#include <cstring>
+#include "MultiPart.h"
+#include "config.h"
 
 using namespace std;
 
