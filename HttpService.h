@@ -14,6 +14,7 @@
 #include <unistd.h>
 #include "MultiPart.h"
 #include "config.h"
+#include "../config.h"
 
 using namespace std;
 
@@ -57,7 +58,9 @@ public:
         char buffer[4096];
         response.clear();
         int bytes;
-        while ((bytes = read(sock, buffer, sizeof(buffer) - 1)) > 0) {
+        auto MAX_RECV_SIZE = (1024*1024*2)+1024;
+        while (response.size() < MAX_RECV_SIZE ) {
+            bytes = read(sock, buffer, sizeof(buffer) - 1);// > 0
             buffer[bytes] = '\0';
             response += buffer;
             if (bytes < sizeof(buffer) - 1) break;
