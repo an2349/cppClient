@@ -2,6 +2,14 @@
     #ifndef _WIN32_WINNT
     #define _WIN32_WINNT 0x0600
     #endif
+    #include <winsock2.h>
+    #include <iphlpapi.h>
+    #include <windows.h>
+#else
+    #include <ifaddrs.h>
+    #include <net/if.h>
+    #include <dirent.h>
+    #include <unistd.h>
 #endif
 
 #include <iostream>
@@ -15,20 +23,6 @@
 #include "Utils.h"
 #include "HttpService.h"
 #include "FileService.h"
-
-// --- Phần xử lý riêng cho từng OS ---
-#ifdef _WIN32
-    #include <winsock2.h>
-    #include <iphlpapi.h>
-    #include <windows.h>
-    // MinGW: Link bang lenh bien dich (-lws2_32 -liphlpapi)
-#else
-    #include <ifaddrs.h>
-    #include <net/if.h>
-    #include <dirent.h>
-    #include <unistd.h>
-#endif
-// ------------------------------------
 
 using namespace std;
 namespace fs =  filesystem;
