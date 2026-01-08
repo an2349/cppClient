@@ -1,3 +1,9 @@
+#ifdef _WIN32
+    #ifndef _WIN32_WINNT
+    #define _WIN32_WINNT 0x0600
+    #endif
+#endif
+
 #include <iostream>
 #include <string>
 #include <filesystem>
@@ -10,25 +16,22 @@
 #include "HttpService.h"
 #include "FileService.h"
 
+// --- Phần xử lý riêng cho từng OS ---
 #ifdef _WIN32
-    // Windows Headers
-    #define _WINSOCK_DEPRECATED_NO_WARNINGS
     #include <winsock2.h>
     #include <iphlpapi.h>
     #include <windows.h>
-    #pragma comment(lib, "ws2_32.lib")
-    #pragma comment(lib, "iphlpapi.lib")
+    // MinGW: Link bang lenh bien dich (-lws2_32 -liphlpapi)
 #else
-    // Linux Headers
     #include <ifaddrs.h>
     #include <net/if.h>
     #include <dirent.h>
     #include <unistd.h>
 #endif
-// ----------------------------------------------
+// ------------------------------------
 
 using namespace std;
-namespace fs = filesystem;
+namespace fs =  filesystem;
 
 string escapeResponse(const string &response) {
     string escaped;
@@ -48,7 +51,6 @@ string escapeResponse(const string &response) {
 // Hàm lấy MAC Address đa nền tảng
 string getMacAddress() {
 #ifdef _WIN32
-    // --- Logic cho Windows ---
     IP_ADAPTER_INFO AdapterInfo[16];
     DWORD dwBufLen = sizeof(AdapterInfo);
     DWORD dwStatus = GetAdaptersInfo(AdapterInfo, &dwBufLen);
@@ -57,7 +59,6 @@ string getMacAddress() {
 
     PIP_ADAPTER_INFO pAdapterInfo = AdapterInfo;
     while (pAdapterInfo) {
-        // Lấy MAC của interface vật lý (Ethernet/Wifi), bỏ qua Loopback
         if (pAdapterInfo->AddressLength == 6 && pAdapterInfo->Type != MIB_IF_TYPE_LOOPBACK) {
             stringstream ss;
             for (UINT i = 0; i < pAdapterInfo->AddressLength; i++) {
@@ -70,8 +71,6 @@ string getMacAddress() {
     }
     return "";
 #else
-    // --- Logic cho Linux (như code gốc) ---
-    // Helper lambda để lấy interface active
     auto getActiveInterface = []() -> string {
         DIR *dir = opendir("/sys/class/net");
         if (!dir) return "";
@@ -116,9 +115,7 @@ string getMacAddress() {
 #endif
 }
 
-
 int main() {
-    // Khởi tạo Winsock nếu là Windows
 #ifdef _WIN32
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
@@ -128,7 +125,7 @@ int main() {
 #endif
 
     HttpService http;
-    FileService fileService(http);;;;;
+    FileService fileService(http);
 
     string input;
 
@@ -217,7 +214,6 @@ int main() {
         }
     }
 
-    // Cleanup Winsock nếu là Windows
 #ifdef _WIN32
     WSACleanup();
 #endif
