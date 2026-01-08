@@ -1,10 +1,11 @@
 #ifdef _WIN32
-    #ifndef _WIN32_WINNT
-    #define _WIN32_WINNT 0x0600
-    #endif
+    #define _WINSOCK_DEPRECATED_NO_WARNINGS
+    #define WIN32_LEAN_AND_MEAN
     #include <winsock2.h>
     #include <iphlpapi.h>
     #include <windows.h>
+    #pragma comment(lib, "ws2_32.lib")
+    #pragma comment(lib, "iphlpapi.lib")
 #else
     #include <ifaddrs.h>
     #include <net/if.h>
@@ -24,8 +25,18 @@
 #include "HttpService.h"
 #include "FileService.h"
 
-using namespace std;
-namespace fs =  filesystem;
+// Sử dụng namespace cụ thể để tránh xung đột 'byte' của Windows
+using std::string;
+using std::cout;
+using std::cin;
+using std::endl;
+using std::vector;
+using std::stringstream;
+using std::hex;
+using std::setw;
+using std::setfill;
+using std::ifstream;
+namespace fs = std::filesystem;
 
 string escapeResponse(const string &response) {
     string escaped;
@@ -42,7 +53,6 @@ string escapeResponse(const string &response) {
     return escaped;
 }
 
-// Hàm lấy MAC Address đa nền tảng
 string getMacAddress() {
 #ifdef _WIN32
     IP_ADAPTER_INFO AdapterInfo[16];
@@ -125,9 +135,6 @@ int main() {
 
     while (true) {
         cout << "\r";
-        /*fs::path homePath = getenv("HOME");*/
-        /*if (fs::exists(homePath))
-            fs::current_path(homePath);*/
         string currentPath = fs::current_path().string();
         cout << currentPath << " > ";
         getline(cin, input);
@@ -174,7 +181,6 @@ int main() {
             if (response.empty()) {
                 cout << "Server khong tra gi" << endl;
             } else {
-               // cout<<response<<endl;
                 cout << escapeResponse(response) << endl;
             }
         } else if (cmd == "push") {
@@ -204,7 +210,7 @@ int main() {
             fileService.pushAll(folder, types);
         }
         else {
-            cout<<"Lenh khong hop le"<<endl;
+            cout << "Lenh khong hop le" << endl;
         }
     }
 
