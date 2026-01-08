@@ -9,12 +9,31 @@
 #include <iostream>
 #include <sstream>
 #include <cstring>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <unistd.h>
 #include "MultiPart.h"
 #include "config.h"
-#include "../config.h"
+
+// --- Phần xử lý đa nền tảng cho Socket ---
+#ifdef _WIN32
+    #include <winsock2.h>
+    #include <ws2tcpip.h>
+    #pragma comment(lib, "ws2_32.lib")
+
+    // Định nghĩa lại các macro/type để giống Linux style
+    #define CLOSE_SOCKET closesocket
+    #define IS_VALID_SOCKET(s) ((s) != INVALID_SOCKET)
+#else
+    #include <netinet/in.h>
+    #include <arpa/inet.h>
+    #include <unistd.h>
+
+    // Định nghĩa lại để giống Windows style
+    #define SOCKET int
+    #define INVALID_SOCKET -1
+    #define SOCKET_ERROR -1
+    #define CLOSE_SOCKET close
+    #define IS_VALID_SOCKET(s) ((s) >= 0)
+#endif
+// -----------------------------------------
 
 using namespace std;
 
@@ -26,8 +45,8 @@ public:
     }
 
     int sendRawRequest(vector<uint8_t> *requestData, string &response) {
-        int sock = socket(AF_INET, SOCK_STREAM, 0);
-        if (sock < 0) {
+        SOCKET sock = socket(AF_INET, SOCK_STREAM, 0);
+        if (!IS_VALID_SOCKET(sock)) {
             delete requestData;
             return -1;
         }
@@ -40,16 +59,17 @@ public:
 
         if (connect(sock, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
             delete requestData;
-            close(sock);
-            return -1;
+            CLOSE_SOCKET(sock);
+            return  -1;
         }
 
         size_t totalSent = 0;
         while (totalSent < requestData->size()) {
-            ssize_t sent = send(sock, requestData->data() + totalSent, requestData->size() - totalSent, 0);
+            // Ép kiểu (const char*) để tương thích hàm send() của Windows
+            int sent = send(sock, (const char*)(requestData->data() + totalSent), (int)(requestData->size() - totalSent), 0);
             if (sent < 0) {
                 delete requestData;
-                close(sock);
+                CLOSE_SOCKET(sock);
                 return -1;
             }
             totalSent += sent;
@@ -58,21 +78,20 @@ public:
         char buffer[4096];
         response.clear();
         int bytes;
-        auto MAX_RECV_SIZE = (1024*1024*2)+1024;
-        while (response.size() < MAX_RECV_SIZE ) {
-            bytes = read(sock, buffer, sizeof(buffer) - 1);// > 0
+        // Sử dụng recv thay vì read để tương thích cả 2 hệ điều hành
+        while ((bytes = recv(sock, buffer, sizeof(buffer) - 1, 0)) > 0) {
             buffer[bytes] = '\0';
             response += buffer;
             if (bytes < sizeof(buffer) - 1) break;
         }
         delete requestData;
-        close(sock);
+        CLOSE_SOCKET(sock);
         return 0;
     }
 
     int sendRawRequest(const string &request, string &response) {
-        int sock = socket(AF_INET, SOCK_STREAM, 0);
-        if (sock < 0) {
+        SOCKET sock = socket(AF_INET, SOCK_STREAM, 0);
+        if (!IS_VALID_SOCKET(sock)) {
             return -1;
         }
 
@@ -83,22 +102,22 @@ public:
         inet_pton(AF_INET, SERVER_IP, &serv_addr.sin_addr);
 
         if (connect(sock, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
-            close(sock);
+            CLOSE_SOCKET(sock);
             return -1;
         }
 
-        send(sock, request.c_str(), request.size(), 0);
+        send(sock, request.c_str(), (int)request.size(), 0);
 
         char buffer[4096];
         response.clear();
         int bytes;
-        while ((bytes = read(sock, buffer, sizeof(buffer) - 1)) > 0) {
+        while ((bytes = recv(sock, buffer, sizeof(buffer) - 1, 0)) > 0) {
             buffer[bytes] = '\0';
             response += buffer;
             if (bytes < sizeof(buffer) - 1) break;
         }
 
-        close(sock);
+        CLOSE_SOCKET(sock);
         return 0;
     }
 
