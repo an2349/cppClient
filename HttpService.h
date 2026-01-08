@@ -1,39 +1,5 @@
-//
-// Created by an on 10/7/25.
-//
-
 #ifndef CLIENT_HTTPSERVICE_H
 #define CLIENT_HTTPSERVICE_H
-
-// Fix rpcndr.h: Windows headers must come before standard C++ headers
-#ifdef _WIN32
-    #ifndef _WIN32_WINNT
-    #define _WIN32_WINNT 0x0600
-    #endif
-    #include <winsock2.h>
-    #include <ws2tcpip.h>
-    #include <iphlpapi.h>
-    #include <windows.h>
-    
-    #define CLOSE_SOCKET closesocket
-    #define IS_VALID_SOCKET(s) ((s) != INVALID_SOCKET)
-    
-    #ifdef __MINGW32__
-        #include <unistd.h>
-    #endif
-    #ifndef SSIZE_T
-        typedef int ssize_t;
-    #endif
-#else
-    #include <netinet/in.h>
-    #include <arpa/inet.h>
-    #include <unistd.h>
-    #define SOCKET int
-    #define INVALID_SOCKET -1
-    #define SOCKET_ERROR -1
-    #define CLOSE_SOCKET close
-    #define IS_VALID_SOCKET(s) ((s) >= 0)
-#endif
 
 #include <string>
 #include <vector>
@@ -43,16 +9,31 @@
 #include "MultiPart.h"
 #include "config.h"
 
-using namespace std;
+#ifdef _WIN32
+    #define WIN32_LEAN_AND_MEAN
+    #include <winsock2.h>
+    #include <ws2tcpip.h>
+    #pragma comment(lib, "ws2_32.lib")
+    
+    #define CLOSE_SOCKET closesocket
+    #define IS_VALID_SOCKET(s) ((s) != INVALID_SOCKET)
+#else
+    #include <netinet/in.h>
+    #include <arpa/inet.h>
+    #include <unistd.h>
+
+    #define SOCKET int
+    #define INVALID_SOCKET -1
+    #define SOCKET_ERROR -1
+    #define CLOSE_SOCKET close
+    #define IS_VALID_SOCKET(s) ((s) >= 0)
+#endif
 
 class HttpService {
-private:
-
 public:
-    HttpService() {
-    }
+    HttpService() {}
 
-    int sendRawRequest(vector<uint8_t> *requestData, string &response) {
+    int sendRawRequest(std::vector<uint8_t> *requestData, std::string &response) {
         SOCKET sock = socket(AF_INET, SOCK_STREAM, 0);
         if (!IS_VALID_SOCKET(sock)) {
             delete requestData;
@@ -68,7 +49,7 @@ public:
         if (connect(sock, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
             delete requestData;
             CLOSE_SOCKET(sock);
-            return  -1;
+            return -1;
         }
 
         size_t totalSent = 0;
@@ -95,7 +76,7 @@ public:
         return 0;
     }
 
-    int sendRawRequest(const string &request, string &response) {
+    int sendRawRequest(const std::string &request, std::string &response) {
         SOCKET sock = socket(AF_INET, SOCK_STREAM, 0);
         if (!IS_VALID_SOCKET(sock)) {
             return -1;
@@ -127,54 +108,54 @@ public:
         return 0;
     }
 
-    int postDiemDanh(const string &masv, const string &mac, string &response) {
-        string serverip = SERVER_IP;
-        string body = "{\"MaSv\":\"" + masv + "\",\"Mac\":\"" + mac + "\"}";
-        string req = "POST /maso HTTP/1.1\r\n";
+    int postDiemDanh(const std::string &masv, const std::string &mac, std::string &response) {
+        std::string serverip = SERVER_IP;
+        std::string body = "{\"MaSv\":\"" + masv + "\",\"Mac\":\"" + mac + "\"}";
+        std::string req = "POST /maso HTTP/1.1\r\n";
         req += "Host: " + serverip + "\r\n";
         req += "Content-Type: application/json\r\n";
-        req += "Content-Length: " + to_string(body.size()) + "\r\n";
+        req += "Content-Length: " + std::to_string(body.size()) + "\r\n";
         req += "Connection: close\r\n\r\n";
         req += body;
-        cout << req << endl;
+        std::cout << req << std::endl;
         return sendRawRequest(req, response);
     }
 
-
-    int putFileChunk(const MultiPartModel &mp, const string &boundary, size_t totalSize, string &response) {
-        stringstream ss;
+    int putFileChunk(const MultiPartModel &mp, const std::string &boundary, size_t totalSize, std::string &response) {
+        std::stringstream ss;
         ss << "--" << boundary << "\r\n";
         ss << "Content-Disposition: form-data; name=\"file\"; filename=\"" << mp.name
-                << "\"; part=\"" << to_string(mp.part) << "\"; total=\"" << to_string(mp.totalPart)
-                << "\"; size=\"" << to_string(totalSize) << "\"\r\n";
+           << "\"; part=\"" << std::to_string(mp.part) << "\"; total=\"" << std::to_string(mp.totalPart)
+           << "\"; size=\"" << std::to_string(totalSize) << "\"\r\n";
         ss << "Content-Type: " << mp.contentType << "\r\n\r\n";
 
-        string headerStr = ss.str();
-        vector<uint8_t> header(headerStr.begin(), headerStr.end());
+        std::string headerStr = ss.str();
+        std::vector<uint8_t> header(headerStr.begin(), headerStr.end());
 
-        const vector<uint8_t> &body = mp.value;
+        const std::vector<uint8_t> &body = mp.value;
 
-        string footerStr = "\r\n";
-        vector<uint8_t> footer(footerStr.begin(), footerStr.end());
+        std::string footerStr = "\r\n";
+        std::vector<uint8_t> footer(footerStr.begin(), footerStr.end());
 
-        vector<uint8_t> *payload = new vector<uint8_t>();
+        std::vector<uint8_t> *payload = new std::vector<uint8_t>();
         payload->reserve(header.size() + body.size() + footer.size());
         payload->insert(payload->end(), header.begin(), header.end());
         payload->insert(payload->end(), body.begin(), body.end());
         payload->insert(payload->end(), footer.begin(), footer.end());
 
-        stringstream req;
+        std::stringstream req;
         req << "PUT /upload HTTP/1.1\r\n";
         req << "Host: " << SERVER_IP << "\r\n";
         req << "Content-Type: multipart/form-data; boundary=" << boundary << "\r\n";
         req << "Content-Length: " << payload->size() << "\r\n";
         req << "Connection: close\r\n\r\n";
 
-        string headerHttp = req.str();
-        vector<uint8_t> *requestData = new vector<uint8_t>(headerHttp.begin(), headerHttp.end());
+        std::string headerHttp = req.str();
+        std::vector<uint8_t> *requestData = new std::vector<uint8_t>(headerHttp.begin(), headerHttp.end());
         requestData->insert(requestData->end(), payload->begin(), payload->end());
         delete payload;
         return sendRawRequest(requestData, response);
     }
 };
+
 #endif //CLIENT_HTTPSERVICE_H
