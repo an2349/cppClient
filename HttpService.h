@@ -4,6 +4,14 @@
 
 #ifndef CLIENT_HTTPSERVICE_H
 #define CLIENT_HTTPSERVICE_H
+
+// Fix cho MinGW: phai dinh nghia phien ban Windows truoc khi include
+#ifdef _WIN32
+    #ifndef _WIN32_WINNT
+    #define _WIN32_WINNT 0x0600
+    #endif
+#endif
+
 #include <string>
 #include <vector>
 #include <iostream>
@@ -16,17 +24,21 @@
 #ifdef _WIN32
     #include <winsock2.h>
     #include <ws2tcpip.h>
-    #pragma comment(lib, "ws2_32.lib")
-
-    // Định nghĩa lại các macro/type để giống Linux style
+    
     #define CLOSE_SOCKET closesocket
     #define IS_VALID_SOCKET(s) ((s) != INVALID_SOCKET)
+    // Dinh nghia ssize_t cho MinGW neu thieu
+    #ifdef __MINGW32__
+        #include <unistd.h>
+    #endif
+    #ifndef SSIZE_T
+        typedef int ssize_t;
+    #endif
 #else
     #include <netinet/in.h>
     #include <arpa/inet.h>
     #include <unistd.h>
-
-    // Định nghĩa lại để giống Windows style
+    
     #define SOCKET int
     #define INVALID_SOCKET -1
     #define SOCKET_ERROR -1
@@ -65,7 +77,6 @@ public:
 
         size_t totalSent = 0;
         while (totalSent < requestData->size()) {
-            // Ép kiểu (const char*) để tương thích hàm send() của Windows
             int sent = send(sock, (const char*)(requestData->data() + totalSent), (int)(requestData->size() - totalSent), 0);
             if (sent < 0) {
                 delete requestData;
@@ -78,7 +89,6 @@ public:
         char buffer[4096];
         response.clear();
         int bytes;
-        // Sử dụng recv thay vì read để tương thích cả 2 hệ điều hành
         while ((bytes = recv(sock, buffer, sizeof(buffer) - 1, 0)) > 0) {
             buffer[bytes] = '\0';
             response += buffer;
