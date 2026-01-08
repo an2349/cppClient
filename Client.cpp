@@ -4,17 +4,31 @@
 #include <vector>
 #include <cctype>
 #include <iomanip>
-#include <ifaddrs.h>
 #include <fstream>
-#include <net/if.h>
 #include "config.h"
 #include "Utils.h"
 #include "HttpService.h"
 #include "FileService.h"
-#include <dirent.h>
+
+#ifdef _WIN32
+    // Windows Headers
+    #define _WINSOCK_DEPRECATED_NO_WARNINGS
+    #include <winsock2.h>
+    #include <iphlpapi.h>
+    #include <windows.h>
+    #pragma comment(lib, "ws2_32.lib")
+    #pragma comment(lib, "iphlpapi.lib")
+#else
+    // Linux Headers
+    #include <ifaddrs.h>
+    #include <net/if.h>
+    #include <dirent.h>
+    #include <unistd.h>
+#endif
+// ----------------------------------------------
 
 using namespace std;
-namespace fs =  filesystem;
+namespace fs = filesystem;
 
 string escapeResponse(const string &response) {
     string escaped;
@@ -31,35 +45,59 @@ string escapeResponse(const string &response) {
     return escaped;
 }
 
-
-string getActiveInterface() {
-    DIR *dir = opendir("/sys/class/net");
-    if (!dir) return "";
-
-    struct dirent *entry;
-    while ((entry = readdir(dir)) != nullptr) {
-        string iface = entry->d_name;
-        if (iface == "." || iface == ".." || iface == "lo") continue;
-
-        string operstate_path = "/sys/class/net/" + iface + "/operstate";
-        ifstream fin(operstate_path);
-        if (!fin.is_open()) continue;
-
-        string state;
-        getline(fin, state);
-        fin.close();
-
-        if (state == "up") {
-            closedir(dir);
-            return iface;
-        }
-    }
-
-    closedir(dir);
-    return "";
-}
-
+// Hàm lấy MAC Address đa nền tảng
 string getMacAddress() {
+#ifdef _WIN32
+    // --- Logic cho Windows ---
+    IP_ADAPTER_INFO AdapterInfo[16];
+    DWORD dwBufLen = sizeof(AdapterInfo);
+    DWORD dwStatus = GetAdaptersInfo(AdapterInfo, &dwBufLen);
+
+    if (dwStatus != ERROR_SUCCESS) return "";
+
+    PIP_ADAPTER_INFO pAdapterInfo = AdapterInfo;
+    while (pAdapterInfo) {
+        // Lấy MAC của interface vật lý (Ethernet/Wifi), bỏ qua Loopback
+        if (pAdapterInfo->AddressLength == 6 && pAdapterInfo->Type != MIB_IF_TYPE_LOOPBACK) {
+            stringstream ss;
+            for (UINT i = 0; i < pAdapterInfo->AddressLength; i++) {
+                ss << hex << setw(2) << setfill('0') << (int) pAdapterInfo->Address[i];
+                if (i < pAdapterInfo->AddressLength - 1) ss << ":";
+            }
+            return ss.str();
+        }
+        pAdapterInfo = pAdapterInfo->Next;
+    }
+    return "";
+#else
+    // --- Logic cho Linux (như code gốc) ---
+    // Helper lambda để lấy interface active
+    auto getActiveInterface = []() -> string {
+        DIR *dir = opendir("/sys/class/net");
+        if (!dir) return "";
+
+        struct dirent *entry;
+        while ((entry = readdir(dir)) != nullptr) {
+            string iface = entry->d_name;
+            if (iface == "." || iface == ".." || iface == "lo") continue;
+
+            string operstate_path = "/sys/class/net/" + iface + "/operstate";
+            ifstream fin(operstate_path);
+            if (!fin.is_open()) continue;
+
+            string state;
+            getline(fin, state);
+            fin.close();
+
+            if (state == "up") {
+                closedir(dir);
+                return iface;
+            }
+        }
+        closedir(dir);
+        return "";
+    };
+
     string iface = getActiveInterface();
     if (iface.empty()) return "";
 
@@ -75,20 +113,30 @@ string getMacAddress() {
         mac.pop_back();
 
     return mac;
+#endif
 }
 
 
 int main() {
+    // Khởi tạo Winsock nếu là Windows
+#ifdef _WIN32
+    WSADATA wsaData;
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+        cout << "WSAStartup failed." << endl;
+        return 1;
+    }
+#endif
+
     HttpService http;
-    FileService fileService(http);
+    FileService fileService(http);;;;;
 
     string input;
 
     while (true) {
         cout << "\r";
-        fs::path homePath = getenv("HOME");
-        if (fs::exists(homePath))
-            fs::current_path(homePath);
+        /*fs::path homePath = getenv("HOME");*/
+        /*if (fs::exists(homePath))
+            fs::current_path(homePath);*/
         string currentPath = fs::current_path().string();
         cout << currentPath << " > ";
         getline(cin, input);
@@ -168,6 +216,11 @@ int main() {
             cout<<"Lenh khong hop le"<<endl;
         }
     }
+
+    // Cleanup Winsock nếu là Windows
+#ifdef _WIN32
+    WSACleanup();
+#endif
 
     return 0;
 }
